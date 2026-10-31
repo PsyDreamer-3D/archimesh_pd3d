@@ -96,7 +96,9 @@ def update_object(self, context):
     #  Clear Parent objects (autohole)
     # ---------------------------------
     myparent = o.parent
+    links = None
     if myparent is not None:
+        links = capture_group_links(myparent)
         ploc = myparent.location
         o.parent = None
         o.location = ploc
@@ -130,6 +132,8 @@ def update_object(self, context):
     shape_mesh(o, tmp_mesh, True)
     o.data = tmp_mesh
     shape_children(o, True)
+    if links is not None:
+        restore_group_links(o.parent, links)
     # Remove data (mesh of active object),
     bpy.data.meshes.remove(oldmesh)
     tmp_mesh.name = oldname

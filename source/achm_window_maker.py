@@ -96,7 +96,9 @@ def update_object(self, context):
     # ---------------------------------
     myparent = o.parent
     ploc = myparent.location
+    links = None
     if myparent is not None:
+        links = capture_group_links(myparent)
         o.parent = None
         o.location = ploc
         # remove_children(parent)
@@ -127,6 +129,8 @@ def update_object(self, context):
 
     # Finally we create all that again (except main object),
     shape_mesh_and_create_children(o, tmp_mesh, True)
+    if links is not None:
+        restore_group_links(o.parent, links)
     o.data = tmp_mesh
     # Remove data (mesh of active object),
     bpy.data.meshes.remove(oldmesh)
