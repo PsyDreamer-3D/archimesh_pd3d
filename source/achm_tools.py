@@ -95,7 +95,7 @@ def set_modifier_mirror(myobject, axis="Y"):
                 if axis == "X":
                     mod.use_axis[0] = True
                 else:
-                    mod.use__axis[0] = False
+                    mod.use_axis[0] = False
 
                 if axis == "Y":
                     mod.use_axis[1] = True
@@ -923,8 +923,8 @@ def remove_children(myobject):
                 for grandchild in child.children:
                     grandchild.parent = None
                 # remove modifiers
-                for mod in child.modifiers:
-                    bpy.ops.object.modifier_remove(name=mod.name)
+                # Data API, not bpy.ops: the operator acts on the active object, not on child.
+                child.modifiers.clear()
             except:
                 pass
             # clear child data

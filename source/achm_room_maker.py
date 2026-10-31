@@ -396,8 +396,8 @@ def update_room(self, context):
                     for grandchild in child.children:
                         grandchild.parent = None
                     # remove modifiers
-                    for mod in child.modifiers:
-                        bpy.ops.object.modifier_remove(mod)
+                    # Data API, not bpy.ops: the operator acts on the active object, not on child.
+                    child.modifiers.clear()
                 except:
                     pass
                 # clear data
