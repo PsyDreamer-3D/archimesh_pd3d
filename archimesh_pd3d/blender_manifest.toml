@@ -8,7 +8,7 @@ type = "add-on"
 tags = ["Add Mesh"]
 blender_version_min = "5.2.0"
 license = ["SPDX:GPL-2.0-or-later"]
-website = "https://github.com/PsyDreamer-3D/archimesh"
+website = "https://github.com/PsyDreamer-3D/archimesh_pd3d"
 copyright = ["2024 Antonio Vazquez (antonioya)", "2026 Jess G (PsyDreamer-3D)"]
 
 [permissions]

@@ -1,5 +1,7 @@
 # Generic files to ignore.
 .*
+# CI workflows live under .github/, which the rule above would hide.
+!.github/
 
 # Python temp paths.
 __pycache__/
@@ -15,5 +17,6 @@ __pycache__/
 /*.patch
 /*.diff
 
-# Locally built extensions.
-/*.zip
+# Locally built extensions (scripts/build_dev.sh writes to dist/).
+*.zip
+/dist/

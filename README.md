@@ -11,26 +11,25 @@ This fork exists because upstream is community-maintained with no active support
 
 ## Changes from upstream 1.2.5
 
-- Room, Door, Rail Window, Panel Window and Venetian edit panels show in the sidebar again on 5.x.
-- Room from Draw reads strokes from the Annotate tool (`Scene.annotation`).
-- Material builders no longer delete the Material Output node. Handles, hidden control boxes and lamp bulbs get working materials.
-- Brick material inputs are set by name, so brick width and row height are correct.
-- Manifest declares the `files` permission (room import/export, kitchen inventory export).
-- Editing a door, window or room no longer breaks Auto Holes. These objects are rebuilt whenever a parameter changes. Wall and baseboard Booleans are now reconnected to the rebuilt cutters, door/window groups stay parented to the room, and hole cutters are refit when frame or wall thickness changes. (Upstream bug, predates Blender 5.)
-- Editing a room, door, window or venetian blind keeps the materials you assigned (including per-face assignments when the face count doesn't change). Before, the defaults came back, or the materials were cleared when "Create materials" was off. Parts that are new in the edit, such as a second leaf after switching to a double door, get the defaults. Materials linked to the object rather than the mesh aren't covered. (Upstream bug, predates Blender 5.)
-- Venetian blind Color applies to that blind only and recolors its material in place, instead of creating a new `Plastic_venetian_material.00x` on every edit.
-- Roller curtains are editable after creation from a "Roller curtain" sidebar panel, like the Venetian blind. New controls: Extend (how far the fabric is unrolled), Color, and Opacity (sheer to blackout). Each roller gets its own fabric material, so recoloring one doesn't recolor the rest. Width and height are no longer operator arguments, so scripts calling `mesh.archimesh_roller(width=...)` need to set `RollerObjectGenerator[0]` on the new object instead. Rollers made with older versions stay one-shot objects.
-- Venetian slats tilt both ways (Angle −85 to 85; positive tips the front edge down), and a Closed toggle tilts them until neighboring slats overlap with a 0.5 mm gap, in the direction of Angle. The closed angle depends on slat depth (about 89° at the default 4 cm), so it can't be a fixed slider value. A 90° angle would make the slats coplanar and z-fight.
-- Raising a room's Number of Walls no longer prints an `IndexError` traceback. The room rebuilt partway through adding the new walls. (Upstream bug, predates Blender 5.)
-- Curtain fabrics reuse the bundled weave texture instead of loading a `fabric_diffuse.png.001` copy and an unused legacy texture each time.
+See [CHANGELOG.md](CHANGELOG.md). It lists every fix and feature the fork adds, including one breaking change to the roller curtain operator.
 
 ## Building
 
+The add-on package is `archimesh_pd3d/`. For a one-off zip:
+
 ```bash
-<path_to_blender> -c extension build --source-dir=./source
+<path_to_blender> -c extension build --source-dir=./archimesh_pd3d --output-dir=./dist
 ```
 
-For more information about building extensions, see the [documentation](https://docs.blender.org/manual/en/latest/extensions/getting_started.html).
+`scripts/build_dev.sh` makes a local `-alpha.N` build from the latest release tag. It needs `blender` on your `PATH`. For more about building extensions, see the [documentation](https://docs.blender.org/manual/en/latest/extensions/getting_started.html).
+
+## Releasing
+
+1. While working, log changes under `## [Unreleased]` in `CHANGELOG.md`.
+2. On `main` with a clean tree, run `scripts/prepare_release.sh X.Y.Z`. It dates the changelog section, sets the manifest version and commits `Release vX.Y.Z`. It doesn't push.
+3. Push that commit to `main` directly or through a rebase merge. The commit message has to stay exactly `Release vX.Y.Z`; a merge commit or a squash with a different PR title won't trigger the release. `.github/workflows/auto-tag-release.yml` checks that the manifest and changelog agree, tags the commit and runs `release.yml`, which builds the zip with Blender 5.2.3 and publishes a GitHub Release using that changelog section as the notes.
+
+As a fallback, pushing a `vX.Y.Z` tag by hand also runs `release.yml`.
 
 ---
 
