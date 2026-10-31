@@ -1783,7 +1783,7 @@ class ARCHIMESH_PT_WindowEdit(Panel):
         o = context.object
         if o is None:
             return False
-        if 'WindowPanelGenerator' not in o:
+        if len(o.WindowPanelGenerator) == 0:
             return False
         else:
             return True
@@ -1796,7 +1796,7 @@ class ARCHIMESH_PT_WindowEdit(Panel):
         # If the selected object didn't be created with the group 'WindowPanelGenerator', this panel is not created.
         # noinspection PyBroadException
         try:
-            if 'WindowPanelGenerator' not in o:
+            if len(o.WindowPanelGenerator) == 0:
                 return
         except:
             return

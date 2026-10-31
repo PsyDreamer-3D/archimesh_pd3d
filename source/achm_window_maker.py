@@ -420,7 +420,7 @@ class ARCHIMESH_PT_WindowObjectgenerator(Panel):
         o = context.object
         if o is None:
             return False
-        if 'WindowObjectGenerator' not in o:
+        if len(o.WindowObjectGenerator) == 0:
             return False
         else:
             return True
@@ -432,7 +432,7 @@ class ARCHIMESH_PT_WindowObjectgenerator(Panel):
         o = context.object
         # noinspection PyBroadException
         try:
-            if 'WindowObjectGenerator' not in o:
+            if len(o.WindowObjectGenerator) == 0:
                 return
         except:
             return

@@ -393,7 +393,7 @@ class ARCHIMESH_PT_DoorObjectgenerator(Panel):
         o = context.object
         if o is None:
             return False
-        if 'DoorObjectGenerator' not in o:
+        if len(o.DoorObjectGenerator) == 0:
             return False
         else:
             return True
@@ -405,7 +405,7 @@ class ARCHIMESH_PT_DoorObjectgenerator(Panel):
         o = context.object
         # noinspection PyBroadException
         try:
-            if 'DoorObjectGenerator' not in o:
+            if len(o.DoorObjectGenerator) == 0:
                 return
         except:
             return

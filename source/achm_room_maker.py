@@ -396,8 +396,8 @@ def update_room(self, context):
                     for grandchild in child.children:
                         grandchild.parent = None
                     # remove modifiers
-                    for mod in child.modifiers:
-                        bpy.ops.object.modifier_remove(mod)
+                    # Data API, not bpy.ops: the operator acts on the active object, not on child.
+                    child.modifiers.clear()
                 except:
                     pass
                 # clear data
@@ -1614,7 +1614,7 @@ class ARCHIMESH_PT_RoomGenerator(Panel):
         o = context.object
         if o is None:
             return False
-        if 'RoomGenerator' not in o:
+        if len(o.RoomGenerator) == 0:
             return False
         else:
             return True
@@ -1627,7 +1627,7 @@ class ARCHIMESH_PT_RoomGenerator(Panel):
         # If the selected object didn't be created with the group 'RoomGenerator', this panel is not created.
         # noinspection PyBroadException
         try:
-            if 'RoomGenerator' not in o:
+            if len(o.RoomGenerator) == 0:
                 return
         except:
             return

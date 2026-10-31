@@ -1,12 +1,15 @@
 schema_version = "1.0.0"
-id = "archimesh"
-name = "Archimesh"
-version = "1.2.5"
+id = "archimesh_pd3d"
+name = "Archimesh (PD3D)"
+version = "2.0.0"
 tagline = "Generate rooms, doors, windows, and other architecture objects"
-maintainer = "Community"
+maintainer = "Jess G (PsyDreamer-3D)"
 type = "add-on"
 tags = ["Add Mesh"]
-blender_version_min = "4.2.0"
+blender_version_min = "5.2.0"
 license = ["SPDX:GPL-2.0-or-later"]
-website = "https://projects.blender.org/extensions/archimesh"
-copyright = ["2024 Antonio Vazquez (antonioya)"]
+website = "https://github.com/PsyDreamer-3D/archimesh"
+copyright = ["2024 Antonio Vazquez (antonioya)", "2026 Jess G (PsyDreamer-3D)"]
+
+[permissions]
+files = "Import/export room data and export kitchen inventory to disk"

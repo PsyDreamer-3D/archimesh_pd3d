@@ -375,7 +375,7 @@ class ARCHIMESH_PT_VenetianObjectgenerator(Panel):
         o = context.object
         if o is None:
             return False
-        if 'VenetianObjectGenerator' not in o:
+        if len(o.VenetianObjectGenerator) == 0:
             return False
         else:
             return True
@@ -387,7 +387,7 @@ class ARCHIMESH_PT_VenetianObjectgenerator(Panel):
         o = context.object
         # noinspection PyBroadException
         try:
-            if 'VenetianObjectGenerator' not in o:
+            if len(o.VenetianObjectGenerator) == 0:
                 return
         except:
             return
