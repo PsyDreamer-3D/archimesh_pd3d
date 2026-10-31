@@ -10,3 +10,6 @@ blender_version_min = "4.2.0"
 license = ["SPDX:GPL-2.0-or-later"]
 website = "https://projects.blender.org/extensions/archimesh"
 copyright = ["2024 Antonio Vazquez (antonioya)"]
+
+[permissions]
+files = "Import/export room data and export kitchen inventory to disk"
