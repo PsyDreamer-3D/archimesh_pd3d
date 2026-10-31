@@ -9,6 +9,7 @@
 # ----------------------------------------------------------
 # noinspection PyUnresolvedReferences
 import bpy
+import re
 from os import path
 
 
@@ -177,6 +178,132 @@ def set_modifier_boolean(myobject, bolobject):
     boolean_modifier = myobject.modifiers.new("", 'BOOLEAN')
     boolean_modifier.operation = 'DIFFERENCE'
     boolean_modifier.object = bolobject
+
+
+# --------------------------------------------------------------------
+# Scale a door/window hole control box so it cuts through the room's walls
+# --------------------------------------------------------------------
+def fit_hole_to_wall(ctrl, room):
+    t = room.RoomGenerator[0].wall_width
+    if t > 0:
+        # Measure the mesh, not ctrl.dimensions: a freshly rebuilt box has no
+        # evaluated bounds until the depsgraph updates.
+        ys = [v.co.y for v in ctrl.data.vertices]
+        ctrl.scale.y = (t + 0.45) / (max(ys) - min(ys))  # Add some gap
+    else:
+        ctrl.scale.y = 1
+
+
+# --------------------------------------------------------------------
+# Keep Boolean cutters connected across property-update rebuilds
+#
+# Door/window/room property updates delete and recreate their child objects
+# (the "_Group" empty with its control boxes, or the room's baseboard/shell).
+# Booleans that cut with those objects, and the group's parenting to the room
+# set up by Auto Holes, would otherwise be lost, so callers capture them before
+# deleting and restore them onto the recreated objects.
+# --------------------------------------------------------------------
+CTRL_ROLES = ("archimesh.ctrl_hole", "archimesh.ctrl_base")
+
+
+def find_ctrl_boxes(group):
+    return {role: child for child in group.children for role in CTRL_ROLES if child.get(role)}
+
+
+def capture_group_links(group):
+    roles = {ctrl: role for role, ctrl in find_ctrl_boxes(group).items()}
+    booleans = [(obj.name, mod.name, roles[mod.object])
+                for obj in bpy.data.objects
+                for mod in obj.modifiers
+                if mod.type == 'BOOLEAN' and mod.object in roles]
+    return {
+        "parent": group.parent,
+        "parent_inverse": group.matrix_parent_inverse.copy(),
+        "booleans": booleans,
+    }
+
+
+def restore_group_links(group, links):
+    parent = links["parent"]
+    if parent is not None:
+        # Only the parent relationship is restored, not the old local transform:
+        # the rebuild already placed the group at its old local location, and
+        # its rotation must follow the (possibly just edited) rotation property.
+        group.parent = parent
+        group.matrix_parent_inverse = links["parent_inverse"]
+
+    ctrls = find_ctrl_boxes(group)
+    if parent is not None and len(parent.RoomGenerator) > 0 and "archimesh.ctrl_hole" in ctrls:
+        fit_hole_to_wall(ctrls["archimesh.ctrl_hole"], parent)
+
+    for owner_name, mod_name, role in links["booleans"]:
+        owner = bpy.data.objects.get(owner_name)
+        mod = owner.modifiers.get(mod_name) if owner is not None else None
+        if mod is None or role not in ctrls:
+            print("Archimesh: could not reconnect Boolean '%s' on '%s'; run Auto Holes again"
+                  % (mod_name, owner_name))
+            continue
+        mod.object = ctrls[role]
+
+
+def capture_child_booleans(child):
+    return [(mod.name, mod.object, mod.operation, mod.solver)
+            for mod in child.modifiers
+            if mod.type == 'BOOLEAN' and mod.object is not None]
+
+
+def restore_child_booleans(child, booleans):
+    for name, target, operation, solver in booleans:
+        mod = child.modifiers.new(name, 'BOOLEAN')
+        mod.object = target
+        mod.operation = operation
+        mod.solver = solver
+
+
+# --------------------------------------------------------------------
+# Keep user-assigned materials across property-update rebuilds
+#
+# Rebuilds give the main object a new mesh and recreate its children, and
+# material slots live on the mesh, so anything the user assigned was replaced
+# by the defaults (or cleared, with "Create materials" off). Objects are matched
+# by name without Blender's ".001" suffix, in hierarchy order, because the
+# rebuild recreates the same parts in the same order; parts with no match (e.g.
+# a second leaf after switching to a double door) keep the builder's defaults.
+# Curves (blind and curtain strings) keep their slots; only meshes carry
+# per-face indices.
+# --------------------------------------------------------------------
+def _material_keys(objs):
+    seen = {}
+    for obj in objs:
+        if obj.type not in {'MESH', 'CURVE'}:
+            continue
+        base = re.sub(r"\.\d{3,}$", "", obj.name)
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        yield (base, n), obj
+
+
+def capture_materials(objs):
+    return {key: (list(obj.data.materials),
+                  [p.material_index for p in obj.data.polygons] if obj.type == 'MESH' else [])
+            for key, obj in _material_keys(objs)}
+
+
+def restore_materials(objs, captured):
+    for key, obj in _material_keys(objs):
+        mats, indices = captured.get(key, ([], []))
+        # An object that had no materials keeps whatever the builder assigned,
+        # so turning "Create materials" on still applies the defaults.
+        if not mats:
+            continue
+        data = obj.data
+        data.materials.clear()
+        for mat in mats:
+            data.materials.append(mat)
+        # Per-face assignments only carry over when the topology is unchanged
+        # (e.g. a wall length edit); otherwise the builder's indices stay.
+        if obj.type == 'MESH' and len(indices) == len(data.polygons):
+            data.polygons.foreach_set("material_index", indices)
 
 
 # --------------------------------------------------------------------
@@ -742,6 +869,18 @@ def create_brick_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315)
 
 
 # --------------------------------------------------------------------
+# Bundled weave texture shared by the curtain fabrics. check_existing reuses
+# the image already in the file instead of adding a ".001" copy per curtain.
+# --------------------------------------------------------------------
+def load_fabric_image():
+    realpath = path.join(path.dirname(__file__), "images", "fabric_diffuse.png")
+    try:
+        return bpy.data.images.load(realpath, check_existing=True)
+    except RuntimeError as err:
+        raise RuntimeError("Archimesh: cannot load fabric texture %s (%s)" % (realpath, err)) from err
+
+
+# --------------------------------------------------------------------
 # Create cycles fabric texture material
 # --------------------------------------------------------------------
 def create_fabric_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315):
@@ -776,25 +915,9 @@ def create_fabric_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315
     node.inputs['Scale'].default_value[1] = 1000
     node.inputs['Scale'].default_value[2] = 1000
 
-    # ===========================================================================
-    # Image texture
-    # ===========================================================================
-    # Load image file.
-
-    realpath = path.join(path.dirname(__file__), "images", "fabric_diffuse.png")
-    print("Loading: " + realpath)
-    try:
-        img = bpy.data.images.load(realpath)
-    except:
-        raise NameError("Cannot load image %s" % realpath)
-
-    # Create image texture from image
-    ctex = bpy.data.textures.new('ColorTex', type='IMAGE')
-    ctex.image = img
-
     node = nodes.new('ShaderNodeTexImage')
     node.name = 'Image1'
-    node.image = ctex.image
+    node.image = load_fabric_image()
     node.location = 615, 350
 
     node = nodes.new('ShaderNodeBsdfTransparent')

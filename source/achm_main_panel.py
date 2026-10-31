@@ -111,12 +111,7 @@ class ARCHIMESH_OT_Hole(Operator):
             for child in obj.parent.children:
                 # noinspection PyBroadException
                 if "archimesh.ctrl_hole" in child and child["archimesh.ctrl_hole"]:
-                    # apply scale
-                    t = parentobj.RoomGenerator[0].wall_width
-                    if t > 0:
-                        child.scale.y = (t + 0.45) / (child.dimensions.y / child.scale.y)  # Add some gap
-                    else:
-                        child.scale.y = 1
+                    fit_hole_to_wall(child, parentobj)
                     # add boolean modifier
                     if not isboolean(myroom, child):
                         set_modifier_boolean(myroom, child)

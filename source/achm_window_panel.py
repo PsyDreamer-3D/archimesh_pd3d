@@ -250,6 +250,7 @@ def create_window():
 def update_window(self, context):
     # When update, the active object is the main object.
     o = bpy.context.active_object
+    kept_materials = capture_materials([o] + list(o.children_recursive))
     oldmesh = o.data
     oldname = o.data.name
     # Now deselect that object to not delete it.
@@ -267,7 +268,9 @@ def update_window(self, context):
         ploc = myparent.location
     else:
         ploc = o.location
+    links = None
     if myparent is not None:
+        links = capture_group_links(myparent)
         o.parent = None
         o.location = ploc
         # remove_children(parent)
@@ -307,6 +310,9 @@ def update_window(self, context):
     bpy.context.view_layer.objects.active = o
 
     do_ctrl_box(o)
+    if links is not None:
+        restore_group_links(o.parent, links)
+    restore_materials([o] + list(o.children_recursive), kept_materials)
 
     # Reselect
     o.select_set(True)

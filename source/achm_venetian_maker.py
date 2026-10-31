@@ -10,8 +10,9 @@
 import bpy
 from math import atan, sin, cos, radians
 # noinspection PyUnresolvedReferences
-from bpy.types import Operator, PropertyGroup, Object, Panel
-from bpy.props import FloatProperty, BoolProperty, IntProperty, FloatVectorProperty, CollectionProperty
+from bpy.types import Operator, PropertyGroup, Object, Panel, Material
+from bpy.props import FloatProperty, BoolProperty, IntProperty, FloatVectorProperty, CollectionProperty, \
+    PointerProperty
 from .achm_tools import *
 
 
@@ -81,6 +82,7 @@ def create_object(self, context):
 def update_object(self, context):
     # When we update, the active object is the main object
     o = bpy.context.active_object
+    kept_materials = capture_materials([o] + list(o.children_recursive))
     oldmesh = o.data
     oldname = o.data.name
     # Now we deselect that object to not delete it.
@@ -103,6 +105,7 @@ def update_object(self, context):
     # Finally we create all that again (except main object),
     shape_mesh_and_create_children(o, tmp_mesh, True)
     o.data = tmp_mesh
+    restore_materials([o] + list(o.children_recursive), kept_materials)
     # Remove data (mesh of active object),
     bpy.data.meshes.remove(oldmesh)
     tmp_mesh.name = oldname
@@ -123,9 +126,18 @@ def shape_mesh_and_create_children(mainobject, tmp_mesh, update=False):
     plastic = None
 
     if mp.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        rgb = mp.objcol
-        plastic = create_diffuse_material("Plastic_venetian_material", True, rgb[0], rgb[1], rgb[2], rgb[0], rgb[1],
-                                          rgb[2], 0.2)
+        if mp.plastic is None and update:
+            # Blinds made before the material was tracked: adopt the one the
+            # builder assigned, so Color keeps working on old files.
+            old = mainobject.data.materials[0] if len(mainobject.data.materials) else None
+            if old is not None and old.name.startswith("Plastic_venetian_material"):
+                mp.plastic = old
+        if mp.plastic is None:
+            rgb = mp.objcol
+            mp.plastic = create_diffuse_material("Plastic_venetian_material", True, rgb[0], rgb[1], rgb[2],
+                                                 rgb[0], rgb[1], rgb[2], 0.2)
+        apply_venetian_color(mp)
+        plastic = mp.plastic
 
     # ------------------
     # Top
@@ -309,6 +321,28 @@ def shape_mesh_and_create_children(mainobject, tmp_mesh, update=False):
 
 
 # ------------------------------------------------------------------
+# Color only recolors the blind's own material instead of rebuilding.
+# A rebuild would restore the captured material and undo the change (see
+# restore_materials).
+# ------------------------------------------------------------------
+def apply_venetian_color(mp):
+    if mp.plastic is None:
+        return
+    color = tuple(mp.objcol)
+    mp.plastic.diffuse_color = color
+    diffuse = mp.plastic.node_tree.nodes.get('Diffuse BSDF')
+    if diffuse is None:
+        print("Archimesh: %s has no Diffuse BSDF node, color not applied" % mp.plastic.name)
+        return
+    diffuse.inputs['Color'].default_value = color
+
+
+# noinspection PyUnusedLocal
+def update_venetian_color(self, context):
+    apply_venetian_color(self)
+
+
+# ------------------------------------------------------------------
 # Define property group class to create or modify
 # ------------------------------------------------------------------
 class ObjectProperties(PropertyGroup):
@@ -349,8 +383,11 @@ class ObjectProperties(PropertyGroup):
             default=(0.616, 0.435, 1.0, 1.0),
             min=0.1, max=1,
             subtype='COLOR',
-            size=4, update=update_object,
+            size=4, update=update_venetian_color,
             )
+    # The blind's own material, so Color recolors this blind only and
+    # rebuilds reuse it instead of adding a ".001" copy each time.
+    plastic: PointerProperty(type=Material)
 
 # Register
 bpy.utils.register_class(ObjectProperties)

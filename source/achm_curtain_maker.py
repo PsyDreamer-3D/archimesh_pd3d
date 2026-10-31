@@ -9,10 +9,12 @@
 # ----------------------------------------------------------
 # noinspection PyUnresolvedReferences
 import bpy
+import bmesh
 from copy import copy
 from math import cos, sin, radians
-from bpy.types import Operator
-from bpy.props import BoolProperty, IntProperty, FloatProperty
+from bpy.types import Operator, PropertyGroup, Object, Panel, Material
+from bpy.props import BoolProperty, IntProperty, FloatProperty, FloatVectorProperty, PointerProperty, \
+    CollectionProperty
 from .achm_tools import *
 
 
@@ -158,7 +160,7 @@ def create_japan_mesh(self):
 
 
 # ------------------------------------------------------------------
-# Define UI class
+# Define operator class to create object
 # Roller curtains
 # ------------------------------------------------------------------
 class ARCHIMESH_OT_Roller(Operator):
@@ -168,59 +170,21 @@ class ARCHIMESH_OT_Roller(Operator):
     bl_category = 'View'
     bl_options = {'REGISTER', 'UNDO'}
 
-    width: FloatProperty(
-            name='Width',
-            min=0.30, max=4, default=1, precision=3,
-            description='Total width',
-            )
-    height: FloatProperty(
-            name='Height',
-            min=0.01, max=50, default=1.7, precision=3,
-            description='Total height',
-            )
-
-    # Materials
-    crt_mat: BoolProperty(
-            name="Create default Cycles materials",
-            description="Create default materials for Cycles render",
-            default=True,
-            )
-
     # -----------------------------------------------------
     # Draw (create UI interface)
     # -----------------------------------------------------
     # noinspection PyUnusedLocal
     def draw(self, context):
         layout = self.layout
-        space = bpy.context.space_data
-        if not space.local_view:
-            # Imperial units warning
-            if bpy.context.scene.unit_settings.system == "IMPERIAL":
-                row = layout.row()
-                row.label(text="Warning: Imperial units not supported", icon='COLOR_RED')
-
-            box = layout.box()
-            row = box.row()
-            row.prop(self, 'width')
-            row.prop(self, 'height')
-
-            box = layout.box()
-            if not context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-                box.enabled = False
-            box.prop(self, 'crt_mat')
-            if self.crt_mat:
-                box.label(text="* Remember to verify fabric texture folder")
-        else:
-            row = layout.row()
-            row.label(text="Warning: Operator does not work in local view mode", icon='ERROR')
+        row = layout.row()
+        row.label(text="Use Properties panel (N) to define parms", icon='INFO')
 
     # -----------------------------------------------------
     # Execute
     # -----------------------------------------------------
-    # noinspection PyUnusedLocal
     def execute(self, context):
         if bpy.context.mode == "OBJECT":
-            create_roller_mesh(self)
+            create_roller_object(context)
             return {'FINISHED'}
         else:
             self.report({'WARNING'}, "Archimesh: Option only valid in Object mode")
@@ -228,18 +192,154 @@ class ARCHIMESH_OT_Roller(Operator):
 
 
 # ------------------------------------------------------------------------------
-# Generate mesh data
-# All custom values are passed using self container (self.myvariable)
+# Create main object (the roller tube). The other parts are children of it.
 # ------------------------------------------------------------------------------
-def create_roller_mesh(self):
-    # deactivate others
+def create_roller_object(context):
     for o in bpy.data.objects:
-        if o.select_get() is True:
-            o.select_set(False)
-    bpy.ops.object.select_all(action='DESELECT')
-    generate_roller(self)
+        o.select_set(False)
 
-    return
+    mainmesh = bpy.data.meshes.new("Roller")
+    mainobject = bpy.data.objects.new("Roller", mainmesh)
+    mainobject.location = context.scene.cursor.location
+    context.collection.objects.link(mainobject)
+    mainobject.RollerObjectGenerator.add()
+
+    shape_roller_and_create_children(mainobject, mainmesh)
+
+    mainobject.select_set(True)
+    context.view_layer.objects.active = mainobject
+
+
+# ------------------------------------------------------------------------------
+# Rebuild the roller after a geometry or material-flag change
+# ------------------------------------------------------------------------------
+# noinspection PyUnusedLocal
+def update_roller(self, context):
+    # The property group belongs to the main object, so this works whether the
+    # edit comes from the sidebar or from a script on a non-active object.
+    o = self.id_data
+    kept_materials = capture_materials([o] + list(o.children_recursive))
+    oldmesh = o.data
+    oldname = o.data.name
+    tmp_mesh = bpy.data.meshes.new("temp")
+    for obj in bpy.data.objects:
+        obj.select_set(False)
+
+    for child in o.children:
+        remove_children(child)
+    remove_children(o)
+
+    shape_roller_and_create_children(o, tmp_mesh)
+    o.data = tmp_mesh
+    restore_materials([o] + list(o.children_recursive), kept_materials)
+    bpy.data.meshes.remove(oldmesh)
+    tmp_mesh.name = oldname
+
+    o.select_set(True)
+    bpy.context.view_layer.objects.active = o
+
+
+# Color and opacity only touch the roller's own materials, so they skip the
+# rebuild. Rebuilding would also bring back the captured material, undoing the
+# change (see restore_materials).
+# noinspection PyUnusedLocal
+def update_roller_fabric(self, context):
+    apply_roller_fabric(self)
+
+
+# ------------------------------------------------------------------
+# Define property group class to create or modify
+# ------------------------------------------------------------------
+class RollerProperties(PropertyGroup):
+    width: FloatProperty(
+            name='Width',
+            min=0.30, max=4, default=1, precision=3,
+            description='Total width', update=update_roller,
+            )
+    height: FloatProperty(
+            name='Height',
+            min=0.01, max=50, default=1.7, precision=3,
+            description='Fabric drop when fully lowered', update=update_roller,
+            )
+    ratio: IntProperty(
+            name='Extend', min=0, max=100, default=100,
+            description='% of the drop that is unrolled (100 fully lowered)', update=update_roller,
+            )
+
+    # Materials
+    crt_mat: BoolProperty(
+            name="Create default Cycles materials",
+            description="Create default materials for Cycles render",
+            default=True, update=update_roller,
+            )
+    objcol: FloatVectorProperty(
+            name="Color",
+            description="Fabric color",
+            default=(0.653, 0.485, 0.265, 1.0),
+            min=0, max=1,
+            subtype='COLOR',
+            size=4, update=update_roller_fabric,
+            )
+    opacity: FloatProperty(
+            name='Opacity', min=0, max=1, default=0.8, precision=2, subtype='FACTOR',
+            description='How much light the fabric blocks (0 sheer, 1 blackout)',
+            update=update_roller_fabric,
+            )
+    # Each roller owns its fabric materials so color and opacity are per curtain.
+    # Shared by-name materials would recolor every roller in the file at once.
+    fabric: PointerProperty(type=Material)
+    fabric_solid: PointerProperty(type=Material)
+
+
+bpy.utils.register_class(RollerProperties)
+Object.RollerObjectGenerator = CollectionProperty(type=RollerProperties)
+
+
+# ------------------------------------------------------------------
+# Define panel class to modify object
+# ------------------------------------------------------------------
+class ARCHIMESH_PT_RollerObjectgenerator(Panel):
+    bl_idname = "OBJECT_PT_roller_generator"
+    bl_label = "Roller curtain"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Create'
+
+    @classmethod
+    def poll(cls, context):
+        o = context.object
+        return o is not None and len(o.RollerObjectGenerator) > 0
+
+    def draw(self, context):
+        layout = self.layout
+        if context.mode == 'EDIT_MESH':
+            layout.label(text='Warning: Operator does not work in edit mode.', icon='ERROR')
+            return
+        if context.space_data.local_view:
+            layout.label(text="Warning: Operator does not work in local view mode", icon='ERROR')
+            return
+
+        rp = context.object.RollerObjectGenerator[0]
+        if context.scene.unit_settings.system == "IMPERIAL":
+            row = layout.row()
+            row.label(text="Warning: Imperial units not supported", icon='COLOR_RED')
+
+        box = layout.box()
+        row = box.row()
+        row.prop(rp, 'width')
+        row.prop(rp, 'height')
+        row = box.row()
+        row.prop(rp, 'ratio', slider=True)
+
+        box = layout.box()
+        if context.scene.render.engine not in {'CYCLES', 'BLENDER_EEVEE'}:
+            box.enabled = False
+        box.prop(rp, 'crt_mat')
+        if rp.crt_mat:
+            row = box.row()
+            row.prop(rp, 'objcol')
+            row = box.row()
+            row.prop(rp, 'opacity', slider=True)
 
 
 # ------------------------------------------------------------------------------
@@ -606,78 +706,67 @@ def create_bezier(objname, points, origin, depth=0.001, fill='FULL'):
 
 # ------------------------------------------------------------------------------
 # Generate Roller curtains
-# All custom values are passed using self container (self.myvariable)
+# Shapes the main object's mesh (the tube) and creates the other parts as children.
 # ------------------------------------------------------------------------------
-def generate_roller(self):
-    location = bpy.context.scene.cursor.location
-    myloc = copy(location)  # copy location to keep 3D cursor position
+def shape_roller_and_create_children(mainobject, tmp_mesh):
+    rp = mainobject.RollerObjectGenerator[0]
+    use_mat = rp.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}
+    # A zero-height panel would be a degenerate face, so a fully rolled-up
+    # curtain keeps a 2 mm lip under the tube.
+    drop = max(rp.height * rp.ratio / 100, 0.002)
+
+    plastic = None
+    if use_mat:
+        ensure_roller_fabric(rp)
+        plastic = create_diffuse_material("Plastic_roller_material", False, 0.653, 0.485, 0.265, 0.653, 0.485, 0.265,
+                                          0.2)
 
     # ------------------
     # Roller Top
     # ------------------
-    fabricsolid = None
-    if self.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        fabricsolid = create_diffuse_material("Fabric_solid_material", False, 0.653, 0.485, 0.265)
+    fill_roller_rail_mesh(tmp_mesh, rp.width, 0.035)
+    finish_roller_mesh(tmp_mesh)
+    if use_mat:
+        tmp_mesh.materials.append(rp.fabric_solid)
 
-    myroller = create_roller_rail("Roller",
-                                  self.width,
-                                  0.035,
-                                  myloc.x, myloc.y, myloc.z,
-                                  self.crt_mat, fabricsolid)
-    # refine
-    remove_doubles(myroller)
-    set_normals(myroller)
-
-    # --------------------------------------------------------------------------------
+    # ------------------
     # Sides
-    # --------------------------------------------------------------------------------
-    plastic = None
-    if self.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        plastic = create_diffuse_material("Plastic_roller_material", False, 0.653, 0.485, 0.265, 0.653, 0.485, 0.265,
-                                          0.2)
+    # ------------------
+    for side, px in (("L", 0.026), ("R", rp.width - 0.026)):
+        myside = create_roller_side(mainobject, side, px)
+        if use_mat:
+            myside.data.materials.append(plastic)
 
-    myside_l = create_roller_sides(myroller, "L",
-                                   0.026, 0, 0,
-                                   self.crt_mat, plastic)
-    # refine
-    remove_doubles(myside_l)
-    set_normals(myside_l)
-
-    myside_r = create_roller_sides(myroller, "R",
-                                   self.width - 0.026, 0, 0,
-                                   self.crt_mat, plastic)
-    # refine
-    remove_doubles(myside_r)
-    set_normals(myside_r)
-
-    # --------------------------------------------------------------------------------
+    # ------------------
     # Panel
-    # --------------------------------------------------------------------------------
-    fabricmat = None
-    if self.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        fabricmat = create_fabric_material("Fabric_translucent_material", False, 0.653, 0.485, 0.265, 0.653, 0.485,
-                                           0.265)
+    # ------------------
+    verts = [(0, 0, 0), (0, 0, -drop), (rp.width, 0, -drop), (rp.width, 0, 0)]
+    panelmesh = bpy.data.meshes.new("Panel")
+    panelmesh.from_pydata(verts, [], [(0, 1, 2, 3)])
+    # UVs in meters keep the weave the same size whatever the width or drop.
+    uvs = panelmesh.uv_layers.new(name="UVMap")
+    for loop in panelmesh.loops:
+        co = verts[loop.vertex_index]
+        uvs.data[loop.index].uv = (co[0], co[2])
+    mypanel = bpy.data.objects.new("Panel", panelmesh)
+    bpy.context.collection.objects.link(mypanel)
+    mypanel.parent = mainobject
+    mypanel.location = (0, 0.035, 0)
+    if use_mat:
+        panelmesh.materials.append(rp.fabric)
 
-    mypanel = create_japan_panel("Panel",
-                                 self.width, self.height,
-                                 0, 0, 0,
-                                 self.crt_mat, fabricmat)
-    mypanel.parent = myroller
-    mypanel.location.x = 0
-    mypanel.location.y = 0.035
-    mypanel.location.z = 0
     # ------------------
     # Roller Bottom
     # ------------------
-    mybottom = create_roller_rail("Roller_bottom",
-                                  self.width,
-                                  0.001,
-                                  0, 0, -self.height,
-                                  self.crt_mat, plastic)
+    bottommesh = bpy.data.meshes.new("Roller_bottom")
+    fill_roller_rail_mesh(bottommesh, rp.width, 0.001)
+    finish_roller_mesh(bottommesh)
+    mybottom = bpy.data.objects.new("Roller_bottom", bottommesh)
+    bpy.context.collection.objects.link(mybottom)
     mybottom.parent = mypanel
-    # refine
-    remove_doubles(myroller)
-    set_normals(myroller)
+    mybottom.location = (0, 0, -drop)
+    if use_mat:
+        bottommesh.materials.append(plastic)
 
     # ------------------------
     # Strings
@@ -688,136 +777,178 @@ def generate_roller(self):
            ((-0.0000, -0.0000, -0.8518), (-0.0000, 0.0369, -0.8391), (0.0000, -0.0373, -0.8646))]  # double element
     mycurve = create_bezier("String", myp, (0, 0, 0))
     set_curve_cycle(mycurve)
-    mycurve.parent = myroller
-    mycurve.location.x = self.width + 0.015
-    mycurve.location.y = 0
-    mycurve.location.z = -0.38
-    if self.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
+    mycurve.parent = mainobject
+    mycurve.location = (rp.width + 0.015, 0, -0.38)
+    if use_mat:
         mat = create_diffuse_material("String_material", False, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.01)
-        set_material(mycurve, mat)
+        mycurve.data.materials.append(mat)
 
-    # deactivate others
     for o in bpy.data.objects:
-        if o.select_get() is True:
+        if o.select_get() is True and o.name != mainobject.name:
             o.select_set(False)
 
-    myroller.select_set(True)
-    bpy.context.view_layer.objects.active = myroller
-
-    return
-
 
 # ------------------------------------------------------------------------------
-# Create roller
+# Fill a mesh with an open cylinder along X (the roller tube or bottom rail)
 #
-# objName: Object name
 # width: Total width of roller
 # radio: Roll radio
-# pX: position X axis
-# pY: position Y axis
-# pZ: position Z axis
-# mat: create default cycles material
-# mymaterial: plastic material or fabric
 # ------------------------------------------------------------------------------
-def create_roller_rail(objname, width, radio, px, py, pz, mat, mymaterial):
+def fill_roller_rail_mesh(mymesh, width, radio):
     myvertex = []
     myfaces = []
     pies = 16
-    seg = 0
 
-    # Add right circle
-    for i in range(pies):
-        x = cos(radians(seg)) * radio
-        y = sin(radians(seg)) * radio
-        mypoint = [(0.0, x, y)]
-        myvertex.extend(mypoint)
-        seg += 360 / pies
-    # Add left circle
-    seg = 0
-    for i in range(pies):
-        x = cos(radians(seg)) * radio
-        y = sin(radians(seg)) * radio
-        mypoint = [(width, x, y)]
-        myvertex.extend(mypoint)
-        seg += 360 / pies
-    # -------------------------------------
-    # Faces
-    # -------------------------------------
-    t = 1
-    for n in range(0, pies):
-        t += 1
-        if t > pies:
-            t = 1
-            myface = [(n, n - pies + 1, n + 1, n + pies)]
-            myfaces.extend(myface)
-        else:
-            myface = [(n, n + 1, n + pies + 1, n + pies)]
-            myfaces.extend(myface)
+    for x in (0.0, width):
+        for i in range(pies):
+            seg = radians(i * 360 / pies)
+            myvertex.append((x, cos(seg) * radio, sin(seg) * radio))
 
-    mymesh = bpy.data.meshes.new(objname)
-    myroll = bpy.data.objects.new(objname, mymesh)
-    bpy.context.collection.objects.link(myroll)
+    for n in range(pies):
+        nxt = (n + 1) % pies
+        myfaces.append((n, nxt, nxt + pies, n + pies))
 
     mymesh.from_pydata(myvertex, [], myfaces)
     mymesh.update(calc_edges=True)
-    # Position
-    myroll.location.x = px
-    myroll.location.y = py
-    myroll.location.z = pz
-
-    # Materials
-    if mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        set_material(myroll, mymaterial)
-
-    # Smooth
-    set_smooth(myroll)
-
-    return myroll
 
 
 # ------------------------------------------------------------------------------
-# Create roller sides
+# Outward normals and smooth shading without entering edit mode, since this
+# also runs inside property update callbacks.
+# ------------------------------------------------------------------------------
+def finish_roller_mesh(mymesh):
+    bm = bmesh.new()
+    bm.from_mesh(mymesh)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mymesh)
+    bm.free()
+    mymesh.shade_smooth()
+
+
+# ------------------------------------------------------------------------------
+# Create roller side cap
 #
-# myRoller: Roller to add sides
+# myroller: Roller to add sides
 # side: Side of the cap R/L
-# pX: position X axis
-# pY: position Y axis
-# pZ: position Z axis
-# mat: create default cycles material
-# plastic: plastic material
+# px: position X axis
 # ------------------------------------------------------------------------------
-def create_roller_sides(myroller, side, px, py, pz, mat, plastic):
-    # Retry mesh data
-    mydata = roller_side()
-
-    # move data
-    myvertex = mydata[0]
-    myfaces = mydata[1]
+def create_roller_side(myroller, side, px):
+    myvertex, myfaces = roller_side()
 
     mymesh = bpy.data.meshes.new("Side." + side)
-    myside = bpy.data.objects.new("Side." + side, mymesh)
-    bpy.context.collection.objects.link(myside)
     mymesh.from_pydata(myvertex, [], myfaces)
     mymesh.update(calc_edges=True)
-    # Position
-    myside.location.x = px
-    myside.location.y = py
-    myside.location.z = pz
-    # rotate
+    finish_roller_mesh(mymesh)
+
+    myside = bpy.data.objects.new("Side." + side, mymesh)
+    bpy.context.collection.objects.link(myside)
+    myside.location = (px, 0, 0)
     if side == "L":
         myside.rotation_euler = (0, 0, radians(180))
-    # parent
     myside.parent = myroller
 
-    # Materials
-    if mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
-        set_material(myside, plastic)
-
-    # Smooth
-    set_smooth(myside)
-    set_modifier_subsurf(myside)
+    mod = myside.modifiers.new("Subdivision", 'SUBSURF')
+    mod.levels = 2
 
     return myside
+
+
+# ------------------------------------------------------------------------------
+# Roller fabric materials
+#
+# The panel shader multiplies the grayscale weave texture by the chosen color,
+# then mixes it with a Transparent BSDF so opacity sets how much light passes.
+# The tube uses a plain diffuse in the same color: rolled-up fabric is many
+# layers thick and shouldn't look see-through.
+# ------------------------------------------------------------------------------
+def ensure_roller_fabric(rp):
+    # Recreated if missing, e.g. after the user purged unused materials.
+    if rp.fabric is None:
+        rp.fabric = create_roller_fabric_material("Roller_fabric_material")
+    if rp.fabric_solid is None:
+        rp.fabric_solid = create_diffuse_material("Roller_fabric_solid_material", True, 0.8, 0.8, 0.8)
+    apply_roller_fabric(rp)
+
+
+def create_roller_fabric_material(matname):
+    mat = bpy.data.materials.new(matname)
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    remove_default_shader(nodes)
+    output = nodes[get_node_index(nodes, 'OUTPUT_MATERIAL')]
+    output.location = 1210, 320
+
+    coords = nodes.new('ShaderNodeTexCoord')
+    coords.location = 26, 395
+
+    # UVs are in meters, so this repeats the weave every millimeter.
+    mapping = nodes.new('ShaderNodeMapping')
+    mapping.location = 266, 380
+    mapping.inputs['Scale'].default_value = (1000, 1000, 1000)
+
+    image = nodes.new('ShaderNodeTexImage')
+    image.image = load_fabric_image()
+    image.location = 450, 380
+
+    tint = nodes.new('ShaderNodeMix')
+    tint.name = 'Roller_tint'
+    tint.data_type = 'RGBA'
+    tint.blend_type = 'MULTIPLY'
+    tint.inputs[0].default_value = 1.0
+    tint.location = 650, 380
+
+    diffuse = nodes.new('ShaderNodeBsdfDiffuse')
+    diffuse.location = 850, 300
+
+    transparent = nodes.new('ShaderNodeBsdfTransparent')
+    transparent.location = 850, 420
+
+    mix = nodes.new('ShaderNodeMixShader')
+    mix.name = 'Roller_opacity'
+    mix.location = 1040, 356
+
+    links.new(coords.outputs['UV'], mapping.inputs['Vector'])
+    links.new(mapping.outputs['Vector'], image.inputs['Vector'])
+    links.new(image.outputs['Color'], _socket(tint.inputs, 'A_Color'))
+    links.new(_socket(tint.outputs, 'Result_Color'), diffuse.inputs['Color'])
+    links.new(transparent.outputs['BSDF'], mix.inputs[1])
+    links.new(diffuse.outputs['BSDF'], mix.inputs[2])
+    links.new(mix.outputs['Shader'], output.inputs['Surface'])
+
+    return mat
+
+
+# Mix node sockets share display names across data types ("A", "B"), so look
+# them up by identifier.
+def _socket(sockets, identifier):
+    for socket in sockets:
+        if socket.identifier == identifier:
+            return socket
+    raise LookupError("Archimesh: node has no socket '%s'" % identifier)
+
+
+def apply_roller_fabric(rp):
+    color = tuple(rp.objcol)
+    if rp.fabric is not None:
+        rp.fabric.diffuse_color = color
+        nodes = rp.fabric.node_tree.nodes
+        tint = nodes.get('Roller_tint')
+        mix = nodes.get('Roller_opacity')
+        if tint is None or mix is None:
+            # The user rebuilt the shader; leave it alone rather than guess.
+            print("Archimesh: %s has no Roller_tint/Roller_opacity node, color and opacity not applied"
+                  % rp.fabric.name)
+        else:
+            _socket(tint.inputs, 'B_Color').default_value = color
+            mix.inputs[0].default_value = rp.opacity
+
+    if rp.fabric_solid is not None:
+        rp.fabric_solid.diffuse_color = color
+        diffuse = rp.fabric_solid.node_tree.nodes.get('Diffuse BSDF')
+        if diffuse is None:
+            print("Archimesh: %s has no Diffuse BSDF node, color not applied" % rp.fabric_solid.name)
+        else:
+            diffuse.inputs['Color'].default_value = color
 
 
 # ----------------------------------------------

@@ -376,6 +376,9 @@ def is_solidify(myobject):
 def update_room(self, context):
     # When we update, the active object is the main object of the room.
     o = bpy.context.active_object
+    # Only the room and the parts it rebuilds; door/window groups parented by
+    # Auto Holes are left untouched.
+    kept_materials = capture_materials([o] + [c for c in o.children if c.get("archimesh.room_object")])
     oldmesh = o.data
     oldname = o.data.name
     # Now we deselect that room object to not delete it.
@@ -385,6 +388,14 @@ def update_room(self, context):
     # deselect all objects
     for obj in bpy.data.objects:
         obj.select_set(False)
+    # Booleans on the baseboard/shell (from Auto Holes) die with the old
+    # children, so keep them by role and re-add them to the rebuilt ones.
+    room_roles = ("archimesh.room_baseboard", "archimesh.room_shell")
+    kept_booleans = {}
+    for child in o.children:
+        for role in room_roles:
+            if child.get(role):
+                kept_booleans[role] = capture_child_booleans(child)
     # Remove children created by this addon:
     for child in o.children:
         # noinspection PyBroadException
@@ -409,6 +420,21 @@ def update_room(self, context):
             pass
     # Finally we create all that again (except main object),
     shape_walls_and_create_children(o, tmp_mesh, True)
+    restore_materials([o] + [c for c in o.children if c.get("archimesh.room_object")], kept_materials)
+    for child in o.children:
+        for role in room_roles:
+            if child.get(role) and role in kept_booleans:
+                restore_child_booleans(child, kept_booleans.pop(role))
+    # Door/window groups parented by Auto Holes: refit their cutters to the
+    # (possibly changed) wall thickness.
+    for group in o.children:
+        hole = find_ctrl_boxes(group).get("archimesh.ctrl_hole")
+        if hole is not None:
+            fit_hole_to_wall(hole, o)
+    for role, booleans in kept_booleans.items():
+        if booleans:
+            # The baseboard or shell was switched off in this edit.
+            print("Archimesh: dropped %d Boolean(s) from removed %s" % (len(booleans), role))
     o.data = tmp_mesh
     # Remove data (mesh of active object),
     bpy.data.meshes.remove(oldmesh)

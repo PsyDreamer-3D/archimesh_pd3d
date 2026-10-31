@@ -82,6 +82,7 @@ def create_object(self, context):
 def update_object(self, context):
     # When we update, the active object is the main object
     o = bpy.context.active_object
+    kept_materials = capture_materials([o] + list(o.children_recursive))
     oldmesh = o.data
     oldname = o.data.name
     # Now we deselect that object to not delete it.
@@ -96,7 +97,9 @@ def update_object(self, context):
     #  Clear Parent objects (autohole)
     # ---------------------------------
     myparent = o.parent
+    links = None
     if myparent is not None:
+        links = capture_group_links(myparent)
         ploc = myparent.location
         o.parent = None
         o.location = ploc
@@ -130,6 +133,9 @@ def update_object(self, context):
     shape_mesh(o, tmp_mesh, True)
     o.data = tmp_mesh
     shape_children(o, True)
+    if links is not None:
+        restore_group_links(o.parent, links)
+    restore_materials([o] + list(o.children_recursive), kept_materials)
     # Remove data (mesh of active object),
     bpy.data.meshes.remove(oldmesh)
     tmp_mesh.name = oldname
