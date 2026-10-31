@@ -138,6 +138,7 @@ classes = (
     achm_books_maker.ARCHIMESH_OT_Books,
     achm_lamp_maker.ARCHIMESH_PT_Lamp,
     achm_curtain_maker.ARCHIMESH_OT_Roller,
+    achm_curtain_maker.ARCHIMESH_PT_RollerObjectgenerator,
     achm_curtain_maker.ARCHIMESH_OT_Japan,
     achm_venetian_maker.ARCHIMESH_OT_Venetian,
     achm_venetian_maker.ARCHIMESH_PT_VenetianObjectgenerator,

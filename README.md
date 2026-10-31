@@ -19,6 +19,8 @@ This fork exists because upstream is community-maintained with no active support
 - Editing a door, window or room no longer breaks Auto Holes. These objects are rebuilt whenever a parameter changes. Wall and baseboard Booleans are now reconnected to the rebuilt cutters, door/window groups stay parented to the room, and hole cutters are refit when frame or wall thickness changes. (Upstream bug, predates Blender 5.)
 - Editing a room, door, window or venetian blind keeps the materials you assigned (including per-face assignments when the face count doesn't change). Before, the defaults came back, or the materials were cleared when "Create materials" was off. Parts that are new in the edit, such as a second leaf after switching to a double door, get the defaults. Materials linked to the object rather than the mesh aren't covered. (Upstream bug, predates Blender 5.)
 - Venetian blind Color applies to that blind only and recolors its material in place, instead of creating a new `Plastic_venetian_material.00x` on every edit.
+- Roller curtains are editable after creation from a "Roller curtain" sidebar panel, like the Venetian blind. New controls: Extend (how far the fabric is unrolled), Color, and Opacity (sheer to blackout). Each roller gets its own fabric material, so recoloring one doesn't recolor the rest. Width and height are no longer operator arguments, so scripts calling `mesh.archimesh_roller(width=...)` need to set `RollerObjectGenerator[0]` on the new object instead. Rollers made with older versions stay one-shot objects.
+- Curtain fabrics reuse the bundled weave texture instead of loading a `fabric_diffuse.png.001` copy and an unused legacy texture each time.
 
 ## Building
 

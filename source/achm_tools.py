@@ -869,6 +869,18 @@ def create_brick_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315)
 
 
 # --------------------------------------------------------------------
+# Bundled weave texture shared by the curtain fabrics. check_existing reuses
+# the image already in the file instead of adding a ".001" copy per curtain.
+# --------------------------------------------------------------------
+def load_fabric_image():
+    realpath = path.join(path.dirname(__file__), "images", "fabric_diffuse.png")
+    try:
+        return bpy.data.images.load(realpath, check_existing=True)
+    except RuntimeError as err:
+        raise RuntimeError("Archimesh: cannot load fabric texture %s (%s)" % (realpath, err)) from err
+
+
+# --------------------------------------------------------------------
 # Create cycles fabric texture material
 # --------------------------------------------------------------------
 def create_fabric_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315):
@@ -903,25 +915,9 @@ def create_fabric_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315
     node.inputs['Scale'].default_value[1] = 1000
     node.inputs['Scale'].default_value[2] = 1000
 
-    # ===========================================================================
-    # Image texture
-    # ===========================================================================
-    # Load image file.
-
-    realpath = path.join(path.dirname(__file__), "images", "fabric_diffuse.png")
-    print("Loading: " + realpath)
-    try:
-        img = bpy.data.images.load(realpath)
-    except:
-        raise NameError("Cannot load image %s" % realpath)
-
-    # Create image texture from image
-    ctex = bpy.data.textures.new('ColorTex', type='IMAGE')
-    ctex.image = img
-
     node = nodes.new('ShaderNodeTexImage')
     node.name = 'Image1'
-    node.image = ctex.image
+    node.image = load_fabric_image()
     node.location = 615, 350
 
     node = nodes.new('ShaderNodeBsdfTransparent')
