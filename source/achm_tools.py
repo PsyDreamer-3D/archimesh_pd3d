@@ -293,8 +293,18 @@ def get_node_index(nodes, datatype):
             return idx
         idx += 1
 
-    # by default
-    return 1
+    # Raise rather than fall back to an arbitrary index: a wrong guess silently
+    # miswires or deletes nodes (e.g. the Material Output).
+    raise LookupError("Archimesh: no node of type %s in material tree" % datatype)
+
+
+# --------------------------------------------------------------------
+# Remove the default surface shader from a new material tree.
+# The default was a Diffuse BSDF before 2.80 and is a Principled BSDF since.
+# --------------------------------------------------------------------
+def remove_default_shader(nodes):
+    for node in [n for n in nodes if n.type in {'BSDF_PRINCIPLED', 'BSDF_DIFFUSE'}]:
+        nodes.remove(node)
 
 
 # --------------------------------------------------------------------
@@ -445,9 +455,8 @@ def create_glass_material(matname, replace, rv=0.333, gv=0.342, bv=0.9):
     mat.diffuse_color = (rv, gv, bv, 1.0)
     nodes = mat.node_tree.nodes
 
-    # support for multilanguage
-    node = nodes[get_node_index(nodes, 'BSDF_DIFFUSE')]
-    mat.node_tree.nodes.remove(node)  # remove not used
+    # The default tree's surface shader is not used; this builder wires its own.
+    remove_default_shader(nodes)
 
     node = nodes.new('ShaderNodeLightPath')
     node.name = 'Light_0'
@@ -476,8 +485,7 @@ def create_glass_material(matname, replace, rv=0.333, gv=0.342, bv=0.9):
     node.inputs[0].default_value = 0.1
     node.location = 690, 290
 
-    node = nodes.new('ShaderNodeOutputMaterial')
-    node.name = 'OUTPUT_MATERIAL'
+    node = nodes[get_node_index(nodes, 'OUTPUT_MATERIAL')]
     node.location = 920, 290
 
     # Connect nodes
@@ -524,9 +532,8 @@ def create_transparent_material(matname, replace, r=1, g=1, b=1, alpha=0):
     mat.diffuse_color = (r, g, b, 1.0)
     nodes = mat.node_tree.nodes
 
-    # support for multilanguage
-    node = nodes[get_node_index(nodes, 'BSDF_DIFFUSE')]
-    mat.node_tree.nodes.remove(node)  # remove not used
+    # The default tree's surface shader is not used; this builder wires its own.
+    remove_default_shader(nodes)
 
     node = nodes.new('ShaderNodeBsdfTransparent')
     node.name = 'Transparent_0'
@@ -560,9 +567,8 @@ def create_glossy_material(matname, replace, r, g, b, rv=0.578, gv=0.555, bv=0.7
     mat.diffuse_color = (rv, gv, bv, 1.0)
     nodes = mat.node_tree.nodes
 
-    # support for multilanguage
-    node = nodes[get_node_index(nodes, 'BSDF_DIFFUSE')]
-    mat.node_tree.nodes.remove(node)  # remove not used
+    # The default tree's surface shader is not used; this builder wires its own.
+    remove_default_shader(nodes)
 
     node = nodes.new('ShaderNodeBsdfGlossy')
     node.name = 'Glossy_0'
@@ -596,9 +602,8 @@ def create_emission_material(matname, replace, r, g, b, energy):
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
 
-    # support for multilanguage
-    node = nodes[get_node_index(nodes, 'BSDF_DIFFUSE')]
-    mat.node_tree.nodes.remove(node)  # remove not used
+    # The default tree's surface shader is not used; this builder wires its own.
+    remove_default_shader(nodes)
 
     node = nodes.new('ShaderNodeEmission')
     node.name = 'Emission_0'
@@ -633,9 +638,8 @@ def create_old_glass_material(matname, replace, rv=0.352716, gv=0.760852, bv=0.9
     mat.diffuse_color = (rv, gv, bv, 1.0)
     nodes = mat.node_tree.nodes
 
-    # support for multilanguage
-    node = nodes[get_node_index(nodes, 'BSDF_DIFFUSE')]
-    mat.node_tree.nodes.remove(node)  # remove not used
+    # The default tree's surface shader is not used; this builder wires its own.
+    remove_default_shader(nodes)
 
     node = nodes.new('ShaderNodeLightPath')
     node.name = 'Light_0'
@@ -717,11 +721,12 @@ def create_brick_material(matname, replace, r, g, b, rv=0.8, gv=0.636, bv=0.315)
 
     brick_node = nodes.new('ShaderNodeTexBrick')
     brick_node.name = 'Brick_0'
-    brick_node.inputs[3].default_value = [0.407, 0.411, 0.394, 1]  # mortar color
-    brick_node.inputs[4].default_value = 3  # scale
-    brick_node.inputs[5].default_value = 0.001  # mortar
-    brick_node.inputs[7].default_value = 0.60  # size_w
-    brick_node.inputs[8].default_value = 0.30  # size_h
+    # By name: positional indices change between Blender versions.
+    brick_node.inputs['Mortar'].default_value = [0.407, 0.411, 0.394, 1]
+    brick_node.inputs['Scale'].default_value = 3
+    brick_node.inputs['Mortar Size'].default_value = 0.001
+    brick_node.inputs['Brick Width'].default_value = 0.60
+    brick_node.inputs['Row Height'].default_value = 0.30
     brick_node.location = 300, 160
 
     rgb_node = nodes.new('ShaderNodeRGB')
