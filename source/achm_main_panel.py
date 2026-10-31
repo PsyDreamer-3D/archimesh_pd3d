@@ -391,7 +391,7 @@ class ARCHIMESH_PT_Main(Panel):
         # -------------------------------------------------------------------------
         # noinspection PyBroadException
         try:
-            if 'RoomGenerator' in myobj:
+            if len(myobj.RoomGenerator) > 0:
                 box = layout.box()
                 box.label(text="Room Tools", icon='MODIFIER')
                 row = box.row(align=False)

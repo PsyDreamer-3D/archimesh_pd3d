@@ -54,28 +54,28 @@ def draw_main(context):
             # -----------------------------------------------------
             # Rooms
             # -----------------------------------------------------
-            if 'RoomGenerator' in myobj:
+            if len(myobj.RoomGenerator) > 0:
                 op = myobj.RoomGenerator[0]
                 draw_room_data(myobj, op, region, rv3d, rgba, rgbaw, fsize, wfsize, space, measure, dspname)
 
             # -----------------------------------------------------
             # Doors
             # -----------------------------------------------------
-            if 'DoorObjectGenerator' in myobj:
+            if len(myobj.DoorObjectGenerator) > 0:
                 op = myobj.DoorObjectGenerator[0]
                 draw_door_data(myobj, op, region, rv3d, rgba, fsize, space, measure)
 
             # -----------------------------------------------------
             # Window (Rail)
             # -----------------------------------------------------
-            if 'WindowObjectGenerator' in myobj:
+            if len(myobj.WindowObjectGenerator) > 0:
                 op = myobj.WindowObjectGenerator[0]
                 draw_window_rail_data(myobj, op, region, rv3d, rgba, fsize, space, measure)
 
             # -----------------------------------------------------
             # Window (Panel)
             # -----------------------------------------------------
-            if 'WindowPanelGenerator' in myobj:
+            if len(myobj.WindowPanelGenerator) > 0:
                 op = myobj.WindowPanelGenerator[0]
                 draw_window_panel_data(myobj, op, region, rv3d, rgba, fsize, space, measure)
 

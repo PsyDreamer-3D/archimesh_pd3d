@@ -1614,7 +1614,7 @@ class ARCHIMESH_PT_RoomGenerator(Panel):
         o = context.object
         if o is None:
             return False
-        if 'RoomGenerator' not in o:
+        if len(o.RoomGenerator) == 0:
             return False
         else:
             return True
@@ -1627,7 +1627,7 @@ class ARCHIMESH_PT_RoomGenerator(Panel):
         # If the selected object didn't be created with the group 'RoomGenerator', this panel is not created.
         # noinspection PyBroadException
         try:
-            if 'RoomGenerator' not in o:
+            if len(o.RoomGenerator) == 0:
                 return
         except:
             return
