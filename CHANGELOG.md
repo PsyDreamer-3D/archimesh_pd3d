@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-10-31
+
 ### Added
 
 - Roller curtains are editable after creation from a "Roller curtain" sidebar panel, like the Venetian blind. New controls: Extend (how far the fabric is unrolled), Color, and Opacity (sheer to blackout). Each roller gets its own fabric material, so recoloring one doesn't recolor the rest.
