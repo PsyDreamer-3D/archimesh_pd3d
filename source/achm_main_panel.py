@@ -166,7 +166,7 @@ class ARCHIMESH_OT_Hole(Operator):
 class ARCHIMESH_OT_Pencil(Operator):
     bl_idname = "object.archimesh_pencil_room"
     bl_label = "Room from Draw"
-    bl_description = "Create a room base on grease pencil strokes (draw from top view (7 key))"
+    bl_description = "Create a room based on annotation strokes (draw from top view (7 key))"
     bl_category = 'View'
     bl_options = {'UNDO', 'REGISTER'}
 
@@ -194,11 +194,16 @@ class ARCHIMESH_OT_Pencil(Operator):
         # noinspection PyBroadException
         try:
 
-            # noinspection PyBroadException
-            try:
-                pencil = bpy.context.object.grease_pencil.layers.active
-            except:
-                pencil = bpy.context.scene.grease_pencil.layers.active
+            # 3D View annotations are always stored on the scene. Since Blender 4.3 they are a
+            # separate Annotation type (not Grease Pencil); Scene.annotation replaced
+            # Scene.grease_pencil and AnnotationLayers has no `active` layer accessor.
+            annotation = scene.annotation
+            pencil = None
+            if annotation is not None and 0 <= annotation.layers.active_index < len(annotation.layers):
+                pencil = annotation.layers[annotation.layers.active_index]
+            if pencil is None:
+                self.report({'WARNING'}, "Archimesh: No annotation layer. Draw with the Annotate tool in top view")
+                return {'CANCELLED'}
 
             if pencil.active_frame is not None:
                 for i, stroke in enumerate(pencil.active_frame.strokes):
@@ -355,13 +360,13 @@ class ARCHIMESH_OT_Pencil(Operator):
                     for frame in pencil.frames:
                         pencil.frames.remove(frame)
 
-                self.report({'INFO'}, "Archimesh: Room created from grease pencil strokes")
+                self.report({'INFO'}, "Archimesh: Room created from annotation strokes")
             else:
-                self.report({'WARNING'}, "Archimesh: Not enough grease pencil strokes for creating room.")
+                self.report({'WARNING'}, "Archimesh: Not enough annotation strokes for creating room.")
 
             return {'FINISHED'}
         except:
-            self.report({'WARNING'}, "Archimesh: No grease pencil strokes. Do strokes in top view before creating room")
+            self.report({'WARNING'}, "Archimesh: No annotation strokes. Draw in top view before creating room")
             return {'CANCELLED'}
 
 
