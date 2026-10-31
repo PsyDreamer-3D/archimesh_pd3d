@@ -180,6 +180,86 @@ def set_modifier_boolean(myobject, bolobject):
 
 
 # --------------------------------------------------------------------
+# Scale a door/window hole control box so it cuts through the room's walls
+# --------------------------------------------------------------------
+def fit_hole_to_wall(ctrl, room):
+    t = room.RoomGenerator[0].wall_width
+    if t > 0:
+        # Measure the mesh, not ctrl.dimensions: a freshly rebuilt box has no
+        # evaluated bounds until the depsgraph updates.
+        ys = [v.co.y for v in ctrl.data.vertices]
+        ctrl.scale.y = (t + 0.45) / (max(ys) - min(ys))  # Add some gap
+    else:
+        ctrl.scale.y = 1
+
+
+# --------------------------------------------------------------------
+# Keep Boolean cutters connected across property-update rebuilds
+#
+# Door/window/room property updates delete and recreate their child objects
+# (the "_Group" empty with its control boxes, or the room's baseboard/shell).
+# Booleans that cut with those objects, and the group's parenting to the room
+# set up by Auto Holes, would otherwise be lost, so callers capture them before
+# deleting and restore them onto the recreated objects.
+# --------------------------------------------------------------------
+CTRL_ROLES = ("archimesh.ctrl_hole", "archimesh.ctrl_base")
+
+
+def find_ctrl_boxes(group):
+    return {role: child for child in group.children for role in CTRL_ROLES if child.get(role)}
+
+
+def capture_group_links(group):
+    roles = {ctrl: role for role, ctrl in find_ctrl_boxes(group).items()}
+    booleans = [(obj.name, mod.name, roles[mod.object])
+                for obj in bpy.data.objects
+                for mod in obj.modifiers
+                if mod.type == 'BOOLEAN' and mod.object in roles]
+    return {
+        "parent": group.parent,
+        "parent_inverse": group.matrix_parent_inverse.copy(),
+        "booleans": booleans,
+    }
+
+
+def restore_group_links(group, links):
+    parent = links["parent"]
+    if parent is not None:
+        # Only the parent relationship is restored, not the old local transform:
+        # the rebuild already placed the group at its old local location, and
+        # its rotation must follow the (possibly just edited) rotation property.
+        group.parent = parent
+        group.matrix_parent_inverse = links["parent_inverse"]
+
+    ctrls = find_ctrl_boxes(group)
+    if parent is not None and len(parent.RoomGenerator) > 0 and "archimesh.ctrl_hole" in ctrls:
+        fit_hole_to_wall(ctrls["archimesh.ctrl_hole"], parent)
+
+    for owner_name, mod_name, role in links["booleans"]:
+        owner = bpy.data.objects.get(owner_name)
+        mod = owner.modifiers.get(mod_name) if owner is not None else None
+        if mod is None or role not in ctrls:
+            print("Archimesh: could not reconnect Boolean '%s' on '%s'; run Auto Holes again"
+                  % (mod_name, owner_name))
+            continue
+        mod.object = ctrls[role]
+
+
+def capture_child_booleans(child):
+    return [(mod.name, mod.object, mod.operation, mod.solver)
+            for mod in child.modifiers
+            if mod.type == 'BOOLEAN' and mod.object is not None]
+
+
+def restore_child_booleans(child, booleans):
+    for name, target, operation, solver in booleans:
+        mod = child.modifiers.new(name, 'BOOLEAN')
+        mod.object = target
+        mod.operation = operation
+        mod.solver = solver
+
+
+# --------------------------------------------------------------------
 # Set material to object
 # --------------------------------------------------------------------
 def set_material(myobject, mymaterial):

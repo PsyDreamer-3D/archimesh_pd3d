@@ -16,6 +16,7 @@ This fork exists because upstream is community-maintained with no active support
 - Material builders no longer delete the Material Output node. Handles, hidden control boxes and lamp bulbs get working materials.
 - Brick material inputs are set by name, so brick width and row height are correct.
 - Manifest declares the `files` permission (room import/export, kitchen inventory export).
+- Editing a door, window or room no longer breaks Auto Holes. These objects are rebuilt whenever a parameter changes. Wall and baseboard Booleans are now reconnected to the rebuilt cutters, door/window groups stay parented to the room, and hole cutters are refit when frame or wall thickness changes. (Upstream bug, predates Blender 5.)
 
 ## Building
 

@@ -267,7 +267,9 @@ def update_window(self, context):
         ploc = myparent.location
     else:
         ploc = o.location
+    links = None
     if myparent is not None:
+        links = capture_group_links(myparent)
         o.parent = None
         o.location = ploc
         # remove_children(parent)
@@ -307,6 +309,8 @@ def update_window(self, context):
     bpy.context.view_layer.objects.active = o
 
     do_ctrl_box(o)
+    if links is not None:
+        restore_group_links(o.parent, links)
 
     # Reselect
     o.select_set(True)
