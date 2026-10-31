@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Releases include an `index.json`, so the fork can be added in Blender as a remote repository (`https://github.com/PsyDreamer-3D/archimesh_pd3d/releases/latest/download/index.json`) and Blender offers updates. See the README's "Installing and updates" section.
+
 ## [2.0.0] — 2026-10-31
 
 ### Added
