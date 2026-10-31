@@ -21,6 +21,7 @@ This fork exists because upstream is community-maintained with no active support
 - Venetian blind Color applies to that blind only and recolors its material in place, instead of creating a new `Plastic_venetian_material.00x` on every edit.
 - Roller curtains are editable after creation from a "Roller curtain" sidebar panel, like the Venetian blind. New controls: Extend (how far the fabric is unrolled), Color, and Opacity (sheer to blackout). Each roller gets its own fabric material, so recoloring one doesn't recolor the rest. Width and height are no longer operator arguments, so scripts calling `mesh.archimesh_roller(width=...)` need to set `RollerObjectGenerator[0]` on the new object instead. Rollers made with older versions stay one-shot objects.
 - Venetian slats tilt both ways (Angle −85 to 85; positive tips the front edge down), and a Closed toggle tilts them until neighboring slats overlap with a 0.5 mm gap, in the direction of Angle. The closed angle depends on slat depth (about 89° at the default 4 cm), so it can't be a fixed slider value. A 90° angle would make the slats coplanar and z-fight.
+- Raising a room's Number of Walls no longer prints an `IndexError` traceback. The room rebuilt partway through adding the new walls. (Upstream bug, predates Blender 5.)
 - Curtain fabrics reuse the bundled weave texture instead of loading a `fabric_diffuse.png.001` copy and an unused legacy texture each time.
 
 ## Building

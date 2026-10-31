@@ -940,8 +940,12 @@ bpy.utils.register_class(WallProperties)
 # ------------------------------------------------------------------
 def add_room_wall(self, context):
     rp = context.object.RoomGenerator[0]
-    for cont in range(len(rp.walls) - 1, rp.wall_num):
+    added = range(len(rp.walls) - 1, rp.wall_num)
+    for cont in added:
         rp.walls.add()
+    # Setting r fires update_room, which rebuilds wall_num walls, so every
+    # wall has to exist before the first assignment.
+    for cont in added:
         # by default, we alternate the direction of the walls.
         if 1 == cont % 2:
             rp.walls[cont].r = 90
