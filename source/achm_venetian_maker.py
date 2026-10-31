@@ -8,7 +8,7 @@
 # ----------------------------------------------------------
 # noinspection PyUnresolvedReferences
 import bpy
-from math import atan, sin, cos, radians
+from math import atan, sin, cos, acos, radians, degrees, copysign
 # noinspection PyUnresolvedReferences
 from bpy.types import Operator, PropertyGroup, Object, Panel, Material
 from bpy.props import FloatProperty, BoolProperty, IntProperty, FloatVectorProperty, CollectionProperty, \
@@ -151,7 +151,8 @@ def shape_mesh_and_create_children(mainobject, tmp_mesh, update=False):
     # segments
     # --------------------------------------------------------------------------------
     margin = mp.depth
-    mydata = create_slat_mesh("Venetian_slats", mp.width, mp.depth, mp.height - 0.06, mp.angle, mp.ratio)
+    angle = slat_angle(mp)
+    mydata = create_slat_mesh("Venetian_slats", mp.width, mp.depth, mp.height - 0.06, angle, mp.ratio)
     myslats = mydata[0]
     myslats.parent = mainobject
     myslats.location.x = 0
@@ -222,15 +223,15 @@ def shape_mesh_and_create_children(mainobject, tmp_mesh, update=False):
         sep = 0.148
 
     mycurvelf.location.x = (mp.width / 2) - sep
-    mycurvelf.location.y = ((-mp.depth / 2) * cos(radians(mp.angle))) - 0.001
+    mycurvelf.location.y = ((-mp.depth / 2) * cos(radians(angle))) - 0.001
     mycurvelf.location.z = 0
 
     mycurvecf.location.x = 0
-    mycurvecf.location.y = ((-mp.depth / 2) * cos(radians(mp.angle))) - 0.001
+    mycurvecf.location.y = ((-mp.depth / 2) * cos(radians(angle))) - 0.001
     mycurvecf.location.z = 0
 
     mycurverf.location.x = -(mp.width / 2) + sep
-    mycurverf.location.y = ((-mp.depth / 2) * cos(radians(mp.angle))) - 0.001
+    mycurverf.location.y = ((-mp.depth / 2) * cos(radians(angle))) - 0.001
     mycurverf.location.z = 0
 
     if mp.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
@@ -259,15 +260,15 @@ def shape_mesh_and_create_children(mainobject, tmp_mesh, update=False):
         sep = 0.148
 
     mycurvelb.location.x = (mp.width / 2) - sep
-    mycurvelb.location.y = ((mp.depth / 2) * cos(radians(mp.angle))) + 0.001
+    mycurvelb.location.y = ((mp.depth / 2) * cos(radians(angle))) + 0.001
     mycurvelb.location.z = 0
 
     mycurvecb.location.x = 0
-    mycurvecb.location.y = ((mp.depth / 2) * cos(radians(mp.angle))) + 0.001
+    mycurvecb.location.y = ((mp.depth / 2) * cos(radians(angle))) + 0.001
     mycurvecb.location.z = 0
 
     mycurverb.location.x = -(mp.width / 2) + sep
-    mycurverb.location.y = ((mp.depth / 2) * cos(radians(mp.angle))) + 0.001
+    mycurverb.location.y = ((mp.depth / 2) * cos(radians(angle))) + 0.001
     mycurverb.location.z = 0
 
     if mp.crt_mat and bpy.context.scene.render.engine in {'CYCLES', 'BLENDER_EEVEE'}:
@@ -363,8 +364,15 @@ class ObjectProperties(PropertyGroup):
             description='Slat depth', update=update_object,
             )
     angle: FloatProperty(
-            name='Angle', min=0, max=85, default=0, precision=1,
-            description='Angle of the slats', update=update_object,
+            name='Angle', min=-85, max=85, default=0, precision=1,
+            description='Tilt of the slats. Positive tips the front edge down, negative tips it up',
+            update=update_object,
+            )
+    closed: BoolProperty(
+            name='Closed',
+            description='Tilt the slats until neighboring slats overlap. Closes in the direction of '
+                        'Angle (0 closes like a positive angle)',
+            default=False, update=update_object,
             )
     ratio: IntProperty(
             name='Extend', min=0, max=100, default=100,
@@ -448,6 +456,8 @@ class ARCHIMESH_PT_VenetianObjectgenerator(Panel):
             row.prop(myobjdat, 'depth')
             row = box.row()
             row.prop(myobjdat, 'angle', slider=True)
+            row.prop(myobjdat, 'closed', toggle=True)
+            row = box.row()
             row.prop(myobjdat, 'ratio', slider=True)
 
             box = layout.box()
@@ -487,6 +497,30 @@ def create_venetian_top(mymesh, x, y, z):
     return
 
 
+# Vertical distance between slats, as a fraction of slat depth.
+SLAT_SPACING = 0.75
+# How far the slat edges sit below its center line (the curved profile).
+SLAT_CROWN = 0.0028
+# Gap left between neighboring closed slats. At exactly 90 degrees they would
+# be coplanar and z-fight, and the slats have no thickness to rest on.
+SLAT_CLOSED_CLEARANCE = 0.0005
+
+
+# ------------------------------------------------------------
+# Slat angle actually used for the mesh
+#
+# Closed: neighboring slats are parallel and SLAT_SPACING * depth apart
+# vertically. The crown is applied as a vertical offset, so their perpendicular
+# gap is (spacing - crown) * cos(angle); solve that for the clearance.
+# ------------------------------------------------------------
+def slat_angle(mp):
+    if not mp.closed:
+        return mp.angle
+    span = mp.depth * SLAT_SPACING - SLAT_CROWN
+    closed = degrees(acos(min(1.0, SLAT_CLOSED_CLEARANCE / span)))
+    return copysign(closed, mp.angle) if mp.angle != 0 else closed
+
+
 # ------------------------------------------------------------
 # Create venetian slats
 #
@@ -505,7 +539,7 @@ def create_slat_mesh(objname, width, depth, height, angle, ratio):
     myfaces = []
     mypoints = []
     # Calculate total slats
-    separation = (depth * 0.75)  # posZ is % of depth
+    separation = depth * SLAT_SPACING
     numslats = int(height / separation)
     collapsedslats = numslats - int((height * ((100 - ratio) / 100)) / separation)
     # --------------------------------
@@ -563,7 +597,7 @@ def get_slat_data(v, angle, width, depth, posz):
     maxx = width / 2
     miny = -depth / 2
     maxy = depth / 2
-    maxz = 0.0028
+    maxz = SLAT_CROWN
     gap = 0.0025
     radio = 0.00195
     sinv = sin(atan(maxz / (maxy - gap)))
