@@ -77,7 +77,8 @@ jobs:
       # updates from then on; the index's relative "./<zip>" archive_url
       # resolves into the same release. Blender's own generator is used
       # because its schema (schema_version, archive_size, permissions, ...)
-      # is what Blender validates when syncing.
+      # is what Blender validates when syncing. Only works for public repos:
+      # GitHub returns 404 for anonymous downloads of private release assets.
       - name: Generate extension repository index
         run: |
           blender --command extension server-generate --repo-dir dist
