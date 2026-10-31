@@ -376,6 +376,9 @@ def is_solidify(myobject):
 def update_room(self, context):
     # When we update, the active object is the main object of the room.
     o = bpy.context.active_object
+    # Only the room and the parts it rebuilds; door/window groups parented by
+    # Auto Holes are left untouched.
+    kept_materials = capture_materials([o] + [c for c in o.children if c.get("archimesh.room_object")])
     oldmesh = o.data
     oldname = o.data.name
     # Now we deselect that room object to not delete it.
@@ -417,6 +420,7 @@ def update_room(self, context):
             pass
     # Finally we create all that again (except main object),
     shape_walls_and_create_children(o, tmp_mesh, True)
+    restore_materials([o] + [c for c in o.children if c.get("archimesh.room_object")], kept_materials)
     for child in o.children:
         for role in room_roles:
             if child.get(role) and role in kept_booleans:

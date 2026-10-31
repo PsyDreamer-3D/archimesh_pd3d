@@ -9,6 +9,7 @@
 # ----------------------------------------------------------
 # noinspection PyUnresolvedReferences
 import bpy
+import re
 from os import path
 
 
@@ -257,6 +258,52 @@ def restore_child_booleans(child, booleans):
         mod.object = target
         mod.operation = operation
         mod.solver = solver
+
+
+# --------------------------------------------------------------------
+# Keep user-assigned materials across property-update rebuilds
+#
+# Rebuilds give the main object a new mesh and recreate its children, and
+# material slots live on the mesh, so anything the user assigned was replaced
+# by the defaults (or cleared, with "Create materials" off). Objects are matched
+# by name without Blender's ".001" suffix, in hierarchy order, because the
+# rebuild recreates the same parts in the same order; parts with no match (e.g.
+# a second leaf after switching to a double door) keep the builder's defaults.
+# Curves (blind and curtain strings) keep their slots; only meshes carry
+# per-face indices.
+# --------------------------------------------------------------------
+def _material_keys(objs):
+    seen = {}
+    for obj in objs:
+        if obj.type not in {'MESH', 'CURVE'}:
+            continue
+        base = re.sub(r"\.\d{3,}$", "", obj.name)
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        yield (base, n), obj
+
+
+def capture_materials(objs):
+    return {key: (list(obj.data.materials),
+                  [p.material_index for p in obj.data.polygons] if obj.type == 'MESH' else [])
+            for key, obj in _material_keys(objs)}
+
+
+def restore_materials(objs, captured):
+    for key, obj in _material_keys(objs):
+        mats, indices = captured.get(key, ([], []))
+        # An object that had no materials keeps whatever the builder assigned,
+        # so turning "Create materials" on still applies the defaults.
+        if not mats:
+            continue
+        data = obj.data
+        data.materials.clear()
+        for mat in mats:
+            data.materials.append(mat)
+        # Per-face assignments only carry over when the topology is unchanged
+        # (e.g. a wall length edit); otherwise the builder's indices stay.
+        if obj.type == 'MESH' and len(indices) == len(data.polygons):
+            data.polygons.foreach_set("material_index", indices)
 
 
 # --------------------------------------------------------------------
