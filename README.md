@@ -11,14 +11,14 @@ This fork exists because upstream is community-maintained with no active support
 
 ## Installing and updates
 
-Add this fork as a remote repository so Blender offers updates:
+Add the PsyDreamer-3D extensions repository so Blender offers updates:
 
 1. Preferences → Get Extensions → Repositories (the drop-down at the top right) → **+** → **Add Remote Repository**.
-2. URL: `https://github.com/PsyDreamer-3D/archimesh_pd3d/releases/latest/download/index.json`
+2. URL: `https://psydreamer-3d.github.io/extensions/index.json`
 3. Turn on **Check for Updates on Startup** if you want Blender to check automatically.
 4. Install "Archimesh (PD3D)" from the Get Extensions list.
 
-Every GitHub Release carries an `index.json` next to the zip, and the `latest/download` URL always points at the newest release, so Blender sees each new version as an update. To install one version by hand without updates, drag that release's zip into Blender instead.
+The [extensions repository](https://github.com/PsyDreamer-3D/extensions) lists the other PsyDreamer-3D add-ons too, and picks up each new release of this fork, so Blender sees it as an update. If you added the older `https://github.com/PsyDreamer-3D/archimesh_pd3d/releases/latest/download/index.json`, remove it, or Archimesh (PD3D) is listed twice. To install one version by hand without updates, drag that release's zip into Blender instead.
 
 ## Changes from upstream 1.2.5
 
